@@ -1403,6 +1403,8 @@ h1, h2, h3, h4 {
         <div class="form-group">
           <label for="email">Email</label>
           <input type="email" id="email" name="email" placeholder="you@company.com" required>
+          <div id="email-error" style="display:none;color:#c45c5c;font-size:0.85rem;margin-top:4px;">Please enter a valid email</div>
+          <div id="email-suggestion" style="display:none;background:#fdf8e8;border:1px solid #c9a96e;border-radius:6px;padding:8px 12px;margin-top:6px;font-size:0.9rem;color:#333;cursor:pointer;">Did you mean <span id="email-suggestion-text" style="color:#c9a96e;font-weight:bold;text-decoration:underline;"></span>?</div>
         </div>
         <div class="form-group">
           <label for="phone">Phone (+1 or +91)</label>
@@ -1523,6 +1525,95 @@ h1, h2, h3, h4 {
   window.addEventListener('scroll', checkSticky, { passive: true });
   window.addEventListener('resize', checkSticky, { passive: true });
 
+  // ── Email Typo Detection ──
+  var EMAIL_TYPO_MAP = {
+    'gmial.com': 'gmail.com',
+    'gmal.com': 'gmail.com',
+    'gamil.com': 'gmail.com',
+    'gmaill.com': 'gmail.com',
+    'gmail.con': 'gmail.com',
+    'gmail.cim': 'gmail.com',
+    'yaho.com': 'yahoo.com',
+    'yahooo.com': 'yahoo.com',
+    'yahoo.con': 'yahoo.com',
+    'hotmial.com': 'hotmail.com',
+    'hotmal.com': 'hotmail.com',
+    'outlok.com': 'outlook.com',
+    'outllook.com': 'outlook.com'
+  };
+  var TLD_TYPOS = { '.con': '.com', '.cim': '.com', '.cmo': '.com', '.ocm': '.com' };
+  var EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+
+  function checkEmailTypo(email) {
+    email = email.trim().toLowerCase();
+    if (email.indexOf('@') === -1) return null;
+    var parts = email.split('@');
+    if (parts.length !== 2) return null;
+    var domain = parts[1];
+    // Check full domain match
+    if (EMAIL_TYPO_MAP[domain]) {
+      return parts[0] + '@' + EMAIL_TYPO_MAP[domain];
+    }
+    // Check TLD typos
+    for (var typo in TLD_TYPOS) {
+      if (domain.slice(-typo.length) === typo) {
+        return parts[0] + '@' + domain.slice(0, -typo.length) + TLD_TYPOS[typo];
+      }
+    }
+    return null;
+  }
+
+  function isValidEmail(email) {
+    email = email.trim();
+    if (!EMAIL_REGEX.test(email)) return false;
+    var local = email.split('@')[0];
+    var domain = email.split('@')[1];
+    // Reject consecutive dots
+    if (local.indexOf('..') !== -1 || domain.indexOf('..') !== -1) return false;
+    // Reject starting/ending dots in local part
+    if (local.charAt(0) === '.' || local.charAt(local.length - 1) === '.') return false;
+    return true;
+  }
+
+  var emailField = document.getElementById('email');
+  var emailError = document.getElementById('email-error');
+  var emailSuggestion = document.getElementById('email-suggestion');
+  var emailSuggestionText = document.getElementById('email-suggestion-text');
+
+  function runEmailCheck() {
+    var val = emailField.value.trim();
+    emailError.style.display = 'none';
+    emailSuggestion.style.display = 'none';
+    emailField.style.borderColor = '';
+    if (!val) return;
+    // Typo check
+    var suggested = checkEmailTypo(val);
+    if (suggested && suggested !== val.toLowerCase()) {
+      emailSuggestionText.textContent = suggested;
+      emailSuggestion.style.display = 'block';
+    }
+    // Validation check
+    if (!isValidEmail(val)) {
+      emailField.style.borderColor = '#c45c5c';
+      emailError.style.display = 'block';
+    }
+  }
+
+  emailField.addEventListener('blur', runEmailCheck);
+  emailField.addEventListener('input', function() {
+    // Clear errors on typing, re-check after short delay
+    emailError.style.display = 'none';
+    emailSuggestion.style.display = 'none';
+    emailField.style.borderColor = '';
+  });
+
+  emailSuggestion.addEventListener('click', function() {
+    emailField.value = emailSuggestionText.textContent;
+    emailSuggestion.style.display = 'none';
+    emailError.style.display = 'none';
+    emailField.style.borderColor = '';
+  });
+
   // ── Form Submission ──
   var form = document.getElementById('reg-form');
   var submitBtn = document.getElementById('submit-btn');
@@ -1543,9 +1634,9 @@ h1, h2, h3, h4 {
       }
     });
 
-    var emailField = document.getElementById('email');
-    if (emailField.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailField.value)) {
+    if (emailField.value && !isValidEmail(emailField.value)) {
       emailField.style.borderColor = '#c45c5c';
+      emailError.style.display = 'block';
       valid = false;
     }
 
